@@ -77,6 +77,13 @@ namespace SnapshotChat
 
             var consumer = new EventingBasicConsumer(channel);
 
+            consumer.Received += (model, ea) =>
+            {
+                var body = ea.Body.ToArray();
+                var message = Encoding.UTF8.GetString(body);
+                Console.WriteLine($" [x] Received {message}");
+            };
+
             while (true)
             {
                 /*
@@ -84,14 +91,9 @@ namespace SnapshotChat
                 if (!string.IsNullOrEmpty(msg) && sender != comm.Rank)
                     Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process {sender}: {msg}");
                 */
-                consumer.Received += (model, ea) =>
-                {
-                    var body = ea.Body.ToArray();
-                    var message = Encoding.UTF8.GetString(body);
-                    Console.WriteLine($" [x] Received {message}");
-                };
+
                 channel.BasicConsume(queue: "msgs",
-                    autoAck: true,
+                    autoAck: false,
                     consumer: consumer);
             }
         });
