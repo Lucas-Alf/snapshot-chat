@@ -13,8 +13,13 @@ namespace SnapshotChat
             MPI.Environment.Run(comm =>
             {
                 Console.WriteLine($"########## Process: {comm.Rank} ##########");
-                var receiveHandler = HandleReceive(comm);
-                var sendHandler = HandleSend(comm);
+
+                var factory = new ConnectionFactory { HostName = "localhost" };
+                using var connection = factory.CreateConnection();
+                using var channel = connection.CreateModel();
+
+                var receiveHandler = HandleReceive(comm, channel);
+                var sendHandler = HandleSend(comm, channel);
                 //var snapshotHandler = HandleSnapshot(comm);
 
                 receiveHandler.Start();
@@ -27,12 +32,8 @@ namespace SnapshotChat
             });
         }
 
-        private static Task HandleSend(Intracommunicator comm) => new Task(() =>
+        private static Task HandleSend(Intracommunicator comm, IModel channel) => new Task(() =>
         {
-            var factory = new ConnectionFactory { HostName = "localhost" };
-            using var connection = factory.CreateConnection();
-            using var channel = connection.CreateModel();
-
             channel.QueueDeclare(queue: "msgs",
                     durable: false,
                     exclusive: false,
@@ -63,12 +64,8 @@ namespace SnapshotChat
             }
         });
 
-        private static Task HandleReceive(Intracommunicator comm) => new Task(() =>
+        private static Task HandleReceive(Intracommunicator comm, IModel channel) => new Task(() =>
         {
-            var factory = new ConnectionFactory { HostName = "localhost" };
-            using var connection = factory.CreateConnection();
-            using var channel = connection.CreateModel();
-
             channel.QueueDeclare(queue: "msgs",
                     durable: false,
                     exclusive: false,
