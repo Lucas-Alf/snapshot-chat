@@ -18,6 +18,12 @@ namespace SnapshotChat
                 using var connection = factory.CreateConnection();
                 using var channel = connection.CreateModel();
 
+                channel.QueueDeclare(queue: "msgs",
+                    durable: false,
+                    exclusive: false,
+                    autoDelete: false,
+                    arguments: null);
+
                 var receiveHandler = HandleReceive(comm, channel);
                 var sendHandler = HandleSend(comm, channel);
                 //var snapshotHandler = HandleSnapshot(comm);
@@ -34,12 +40,6 @@ namespace SnapshotChat
 
         private static Task HandleSend(Intracommunicator comm, IModel channel) => new Task(() =>
         {
-            channel.QueueDeclare(queue: "msgs",
-                    durable: false,
-                    exclusive: false,
-                    autoDelete: false,
-                    arguments: null);
-
             while (true)
             {
                 var input = Console.ReadLine();
@@ -66,12 +66,6 @@ namespace SnapshotChat
 
         private static Task HandleReceive(Intracommunicator comm, IModel channel) => new Task(() =>
         {
-            channel.QueueDeclare(queue: "msgs",
-                    durable: false,
-                    exclusive: false,
-                    autoDelete: false,
-                    arguments: null);
-
             var consumer = new EventingBasicConsumer(channel);
 
             consumer.Received += (model, ea) =>
