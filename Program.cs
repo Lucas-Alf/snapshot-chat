@@ -24,6 +24,7 @@ namespace SnapshotChat
 
         private static Task HandleSend(IModel channel) => new Task(() =>
         {
+            channel.ExchangeDeclare(exchange: "msgs", type: ExchangeType.Fanout);
             while (true)
             {
                 var input = GetUserInput();
@@ -31,8 +32,8 @@ namespace SnapshotChat
                 {
                     var body = Encoding.UTF8.GetBytes(input);
                     channel.BasicPublish(
-                        exchange: string.Empty,
-                        routingKey: channel.CurrentQueue,
+                        exchange: "msgs",
+                        routingKey: string.Empty,
                         basicProperties: null,
                         body: body
                     );
@@ -42,6 +43,13 @@ namespace SnapshotChat
 
         private static Task HandleReceive(IModel channel) => new Task(() =>
         {
+            channel.ExchangeDeclare(exchange: "msgs", type: ExchangeType.Fanout);
+
+            var queueName = channel.QueueDeclare().QueueName;
+            channel.QueueBind(queue: queueName,
+                exchange: "msgs",
+                routingKey: string.Empty);
+
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
             {
@@ -51,7 +59,7 @@ namespace SnapshotChat
             };
 
             channel.BasicConsume(
-                queue: channel.CurrentQueue,
+                queue: queueName,//channel.CurrentQueue,
                 autoAck: true,
                 consumer: consumer
             );
