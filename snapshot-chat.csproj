@@ -8,12 +8,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup Condition=" '$(OS)' == 'Windows_NT' ">
-    <PackageReference Include="MPI.NET" Version="1.4.0" />
+  <ItemGroup>
     <PackageReference Include="RabbitMQ.Client" Version="6.7.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' ">
-    <PackageReference Include="MPI.NET-Linux-64" Version="1.4.0" />
   </ItemGroup>
 </Project>

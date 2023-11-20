@@ -1,18 +1,15 @@
-# Install on linux
-
-### Install packages
-
-`sudo apt install gcc openmpi-bin openmpi-common libopenmpi-dev`
+### Install RabbitMQ
+Run the following command and wait some seconds for the container creation
+```
+docker-compose up -d
+```
 
 ### Compile
 ```
 dotnet build
 ```
 
-###  Extract dependencies
-Extract `MPI_Deps.zip` in `bin/Debug/net7.0`
-
 ### Run
 ```
-mpiexec -n 2 -xterm -1 dotnet ./bin/Debug/net7.0/snapshot-chat.dll
+dotnet ./bin/Debug/net7.0/snapshot-chat.dll
 ```
