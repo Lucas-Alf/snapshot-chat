@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System.Collections;
 using System.Text;
 
 namespace SnapshotChat
@@ -8,11 +9,35 @@ namespace SnapshotChat
     {
         static void Main(string[] args)
         {
-            using (var channel = ChannelFactory.OpenConnection("msgs"))
+            using (var channel = ChannelFactory.OpenConnection("processes"))
             {
+                //Generate random process name
+                int rand = new Random(Guid.NewGuid().GetHashCode()).Next();
+                string randStr = rand.ToString();
+
+                //Input queue of process
+                channel.QueueDeclare(
+                    queue: randStr,
+                    durable: false,
+                    exclusive: false,
+                    autoDelete: true,
+                    arguments: null
+                );
+
+                channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
+
+                //Write process name on queue of processe
+                var body = Encoding.UTF8.GetBytes(randStr);
+                channel.BasicPublish(
+                    exchange: "processes",
+                    routingKey: string.Empty,
+                    basicProperties: null,
+                    body: body
+                );
+
                 Console.WriteLine("RabbitMQ Connected");
-                var receiveHandler = HandleReceive(channel);
-                var sendHandler = HandleSend(channel);
+                var receiveHandler = HandleReceive(channel, randStr);
+                var sendHandler = HandleSend(channel, randStr);
 
                 receiveHandler.Start();
                 sendHandler.Start();
@@ -22,32 +47,14 @@ namespace SnapshotChat
             }
         }
 
-        private static Task HandleSend(IModel channel) => new Task(() =>
+        private static Task HandleSend(IModel channel, string name) => new Task(() =>
         {
-            channel.ExchangeDeclare(exchange: "msgs", type: ExchangeType.Fanout);
-            while (true)
-            {
-                var input = GetUserInput();
-                if (!string.IsNullOrEmpty(input))
-                {
-                    var body = Encoding.UTF8.GetBytes(input);
-                    channel.BasicPublish(
-                        exchange: "msgs",
-                        routingKey: string.Empty,
-                        basicProperties: null,
-                        body: body
-                    );
-                }
-            }
-        });
+            var processes = new ArrayList();
 
-        private static Task HandleReceive(IModel channel) => new Task(() =>
-        {
-            channel.ExchangeDeclare(exchange: "msgs", type: ExchangeType.Fanout);
-
+            channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
             var queueName = channel.QueueDeclare().QueueName;
             channel.QueueBind(queue: queueName,
-                exchange: "msgs",
+                exchange: "processes",
                 routingKey: string.Empty);
 
             var consumer = new EventingBasicConsumer(channel);
@@ -55,11 +62,53 @@ namespace SnapshotChat
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
-                Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process ???: {message}");
+                Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process ??????: {message}");
+                processes.Add(body);
             };
 
             channel.BasicConsume(
                 queue: queueName,//channel.CurrentQueue,
+                autoAck: false,
+                consumer: consumer
+            );
+
+
+            while (true)
+            {
+                var input = GetUserInput();
+                if (!string.IsNullOrEmpty(input))
+                {
+                    var body = Encoding.UTF8.GetBytes(name + "/%#%/" + input);
+                    foreach (var process in processes)
+                    {
+                        if (process.ToString() != name)
+                        {
+                            channel.BasicPublish(
+                                exchange: string.Empty,
+                                routingKey: process.ToString(),
+                                basicProperties: null,
+                                body: body
+                            );
+                        }
+                    }
+                }
+            }
+        });
+
+        private static Task HandleReceive(IModel channel, string name) => new Task(() =>
+        {
+            var consumer = new EventingBasicConsumer(channel);
+            consumer.Received += (model, ea) =>
+            {
+                var body = ea.Body.ToArray();
+                var message = Encoding.UTF8.GetString(body).Split("/%#%/");
+                var sender = message[0];
+                var msg = message[1];
+                Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process {sender}: {msg}");
+            };
+
+            channel.BasicConsume(
+                queue: name,//channel.CurrentQueue,
                 autoAck: true,
                 consumer: consumer
             );
