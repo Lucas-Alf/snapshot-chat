@@ -26,7 +26,7 @@ namespace SnapshotChat
 
                 channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
 
-                //Write process name on queue of processe
+                //Write process name on queue of processes
                 var body = Encoding.UTF8.GetBytes(randStr);
                 channel.BasicPublish(
                     exchange: "processes",
@@ -62,8 +62,22 @@ namespace SnapshotChat
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
-                Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process ??????: {message}");
-                processes.Add(body);
+
+                if (!processes.Contains(message) && !name.Equals(message))
+                {
+                    Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process ??????: {message}");
+                    processes.Add(message);
+
+                    //Workaround to if a new process enters it needs the name of the others
+                    body = Encoding.UTF8.GetBytes(name);
+                    Thread.Sleep(1000);
+                    channel.BasicPublish(
+                        exchange: "processes",
+                        routingKey: string.Empty,
+                        basicProperties: null,
+                        body: body
+                    );
+                }
             };
 
             channel.BasicConsume(
@@ -71,7 +85,6 @@ namespace SnapshotChat
                 autoAck: false,
                 consumer: consumer
             );
-
 
             while (true)
             {
@@ -106,7 +119,7 @@ namespace SnapshotChat
                 var msg = message[1];
                 Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process {sender}: {msg}");
             };
-
+            //Thread.Sleep(5000);
             channel.BasicConsume(
                 queue: name,//channel.CurrentQueue,
                 autoAck: true,
