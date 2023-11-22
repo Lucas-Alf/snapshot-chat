@@ -26,7 +26,7 @@ namespace SnapshotChat
             );
 
             channel.QueueDeclare(
-                queue: processName,
+                queue: $"{exchange}-{processName}",
                 durable: false,
                 exclusive: false,
                 autoDelete: true,

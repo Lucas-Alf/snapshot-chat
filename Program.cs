@@ -57,11 +57,11 @@ namespace SnapshotChat
                     var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + input);
                     foreach (var process in CHAT_CHANNELS)
                     {
-                        if (process.ToString() != processName)
+                        if (process != processName)
                         {
                             channel.BasicPublish(
                                 exchange: string.Empty,
-                                routingKey: process.ToString(),
+                                routingKey: $"{CHAT_EXCHANGE}-{process}",
                                 basicProperties: null,
                                 body: body
                             );
@@ -90,7 +90,7 @@ namespace SnapshotChat
             };
             //Thread.Sleep(5000);
             channel.BasicConsume(
-                queue: processName,//channel.CurrentQueue,
+                queue: $"{CHAT_EXCHANGE}-{processName}",//channel.CurrentQueue,
                 autoAck: true,
                 consumer: consumer
             );
@@ -119,11 +119,11 @@ namespace SnapshotChat
                     var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + "snapshot");
                     foreach (var process in SNAPSHOT_CHANNELS)
                     {
-                        if (process.ToString() != processName)
+                        if (process != processName)
                         {
                             channel.BasicPublish(
                                 exchange: string.Empty,
-                                routingKey: process.ToString(),
+                                routingKey: $"{SNAPSHOT_EXCHANGE}-{process}",
                                 basicProperties: null,
                                 body: body
                             );
@@ -156,7 +156,7 @@ namespace SnapshotChat
             };
             //Thread.Sleep(5000);
             channel.BasicConsume(
-                queue: processName,//channel.CurrentQueue,
+                queue: $"{SNAPSHOT_EXCHANGE}-{processName}",//channel.CurrentQueue,
                 autoAck: true,
                 consumer: consumer
             );
