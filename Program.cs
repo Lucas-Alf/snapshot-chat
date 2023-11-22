@@ -1,6 +1,5 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Collections;
 using System.Text;
 
 namespace SnapshotChat
@@ -13,11 +12,11 @@ namespace SnapshotChat
             {
                 //Generate random process name
                 int rand = new Random(Guid.NewGuid().GetHashCode()).Next();
-                string randStr = rand.ToString();
+                string processName = rand.ToString();
 
                 //Input queue of process
                 channel.QueueDeclare(
-                    queue: randStr,
+                    queue: processName,
                     durable: false,
                     exclusive: false,
                     autoDelete: true,
@@ -27,7 +26,7 @@ namespace SnapshotChat
                 channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
 
                 //Write process name on queue of processes
-                var body = Encoding.UTF8.GetBytes(randStr);
+                var body = Encoding.UTF8.GetBytes(processName);
                 channel.BasicPublish(
                     exchange: "processes",
                     routingKey: string.Empty,
@@ -35,9 +34,9 @@ namespace SnapshotChat
                     body: body
                 );
 
-                Console.WriteLine("RabbitMQ Connected");
-                var receiveHandler = HandleReceive(channel, randStr);
-                var sendHandler = HandleSend(channel, randStr);
+                FancyConsoleWrite("RabbitMQ Connected");
+                var receiveHandler = HandleReceive(channel, processName);
+                var sendHandler = HandleSend(channel, processName);
 
                 receiveHandler.Start();
                 sendHandler.Start();
@@ -49,13 +48,15 @@ namespace SnapshotChat
 
         private static Task HandleSend(IModel channel, string name) => new Task(() =>
         {
-            var processes = new ArrayList();
+            var processes = new List<string>();
 
             channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
             var queueName = channel.QueueDeclare().QueueName;
-            channel.QueueBind(queue: queueName,
+            channel.QueueBind(
+                queue: queueName,
                 exchange: "processes",
-                routingKey: string.Empty);
+                routingKey: string.Empty
+            );
 
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
@@ -65,7 +66,7 @@ namespace SnapshotChat
 
                 if (!processes.Contains(message) && !name.Equals(message))
                 {
-                    Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process ??????: {message}");
+                    FancyConsoleWrite($"Process {message} joined the channel");
                     processes.Add(message);
 
                     //Workaround to if a new process enters it needs the name of the others
@@ -117,7 +118,7 @@ namespace SnapshotChat
                 var message = Encoding.UTF8.GetString(body).Split("/%#%/");
                 var sender = message[0];
                 var msg = message[1];
-                Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Process {sender}: {msg}");
+                FancyConsoleWrite($"Process {sender}: {msg}");
             };
             //Thread.Sleep(5000);
             channel.BasicConsume(
@@ -134,6 +135,11 @@ namespace SnapshotChat
         //     Console.WriteLine(text);
         //     Console.ResetColor();
         // }
+
+        private static void FancyConsoleWrite(string value)
+        {
+            Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - {value}");
+        }
 
         private static string? GetUserInput()
         {
