@@ -1,10 +1,11 @@
+using System.Text;
 using RabbitMQ.Client;
 
 namespace SnapshotChat
 {
     public class ChannelFactory
     {
-        public static IModel OpenConnection(string queueName)
+        public static IModel OpenConnection(string exchange, string processName)
         {
             var factory = new ConnectionFactory
             {
@@ -15,13 +16,31 @@ namespace SnapshotChat
 
             var connection = factory.CreateConnection();
             var channel = connection.CreateModel();
-            
+
             channel.QueueDeclare(
-                queue: queueName,
+                queue: exchange,
                 durable: false,
                 exclusive: false,
                 autoDelete: false,
                 arguments: null
+            );
+
+            channel.QueueDeclare(
+                queue: processName,
+                durable: false,
+                exclusive: false,
+                autoDelete: true,
+                arguments: null
+            );
+
+            channel.ExchangeDeclare(exchange: exchange, type: ExchangeType.Fanout);
+
+            var body = Encoding.UTF8.GetBytes(processName);
+            channel.BasicPublish(
+                exchange: exchange,
+                routingKey: string.Empty,
+                basicProperties: null,
+                body: body
             );
 
             return channel;

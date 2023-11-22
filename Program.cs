@@ -4,98 +4,60 @@ using System.Text;
 
 namespace SnapshotChat
 {
-    class SnapshotChat
+    partial class SnapshotChat
     {
+        private static List<string> CHAT_CHANNELS = new List<string>();
+        private static List<string> SNAPSHOT_CHANNELS = new List<string>();
+        private static List<string> CHAT_HISTORY = new List<string>();
+        private static string CHAT_EXCHANGE = "chat";
+        private static string SNAPSHOT_EXCHANGE = "snapshot";
+
         static void Main(string[] args)
         {
-            using (var channel = ChannelFactory.OpenConnection("processes"))
+            //Generate random process name
+            int rand = new Random(Guid.NewGuid().GetHashCode()).Next();
+            string processName = rand.ToString();
+
+            using (var chatChannel = ChannelFactory.OpenConnection(CHAT_EXCHANGE, processName))
+            using (var snapshotChannel = ChannelFactory.OpenConnection(SNAPSHOT_EXCHANGE, processName))
             {
-                //Generate random process name
-                int rand = new Random(Guid.NewGuid().GetHashCode()).Next();
-                string processName = rand.ToString();
-
-                //Input queue of process
-                channel.QueueDeclare(
-                    queue: processName,
-                    durable: false,
-                    exclusive: false,
-                    autoDelete: true,
-                    arguments: null
-                );
-
-                channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
-
-                //Write process name on queue of processes
-                var body = Encoding.UTF8.GetBytes(processName);
-                channel.BasicPublish(
-                    exchange: "processes",
-                    routingKey: string.Empty,
-                    basicProperties: null,
-                    body: body
-                );
-
-                FancyConsoleWrite("RabbitMQ Connected");
-                var receiveHandler = HandleReceive(channel, processName);
-                var sendHandler = HandleSend(channel, processName);
+                ChatWrite("RabbitMQ Connected");
+                var receiveHandler = HandleReceive(chatChannel, processName);
+                var sendHandler = HandleSend(chatChannel, processName);
+                var receiveSnapshotMarkerHandler = HandleReceiveSnapshotMarker(snapshotChannel, processName);
+                var sendSnapshotRequestHandler = HandleRequestSnapshot(snapshotChannel, processName);
 
                 receiveHandler.Start();
                 sendHandler.Start();
+                receiveSnapshotMarkerHandler.Start();
+                sendSnapshotRequestHandler.Start();
 
                 receiveHandler.Wait();
                 sendHandler.Wait();
+                receiveSnapshotMarkerHandler.Wait();
+                sendSnapshotRequestHandler.Wait();
             }
         }
 
-        private static Task HandleSend(IModel channel, string name) => new Task(() =>
+        /// <summary>
+        /// Send chat messages to other processes
+        /// </summary>
+        /// <param name="channel"></param>
+        /// <param name="processName"></param>
+        /// <returns></returns>
+        private static Task HandleSend(IModel channel, string processName) => new Task(() =>
         {
-            var processes = new List<string>();
-
-            channel.ExchangeDeclare(exchange: "processes", type: ExchangeType.Fanout);
-            var queueName = channel.QueueDeclare().QueueName;
-            channel.QueueBind(
-                queue: queueName,
-                exchange: "processes",
-                routingKey: string.Empty
-            );
-
-            var consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (model, ea) =>
-            {
-                var body = ea.Body.ToArray();
-                var message = Encoding.UTF8.GetString(body);
-
-                if (!processes.Contains(message) && !name.Equals(message))
-                {
-                    FancyConsoleWrite($"Process {message} joined the channel");
-                    processes.Add(message);
-
-                    //Workaround to if a new process enters it needs the name of the others
-                    body = Encoding.UTF8.GetBytes(name);
-                    Thread.Sleep(1000);
-                    channel.BasicPublish(
-                        exchange: "processes",
-                        routingKey: string.Empty,
-                        basicProperties: null,
-                        body: body
-                    );
-                }
-            };
-
-            channel.BasicConsume(
-                queue: queueName,//channel.CurrentQueue,
-                autoAck: false,
-                consumer: consumer
-            );
+            RegisterProcess(channel, processName, CHAT_EXCHANGE, CHAT_CHANNELS);
 
             while (true)
             {
-                var input = GetUserInput();
+                var input = GetUserInput(processName);
                 if (!string.IsNullOrEmpty(input))
                 {
-                    var body = Encoding.UTF8.GetBytes(name + "/%#%/" + input);
-                    foreach (var process in processes)
+                    var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + input);
+                    foreach (var process in CHAT_CHANNELS)
                     {
-                        if (process.ToString() != name)
+                        if (process.ToString() != processName)
                         {
                             channel.BasicPublish(
                                 exchange: string.Empty,
@@ -109,7 +71,13 @@ namespace SnapshotChat
             }
         });
 
-        private static Task HandleReceive(IModel channel, string name) => new Task(() =>
+        /// <summary>
+        /// Receive chat messages from other processes
+        /// </summary>
+        /// <param name="channel"></param>
+        /// <param name="processName"></param>
+        /// <returns></returns>
+        private static Task HandleReceive(IModel channel, string processName) => new Task(() =>
         {
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
@@ -118,37 +86,80 @@ namespace SnapshotChat
                 var message = Encoding.UTF8.GetString(body).Split("/%#%/");
                 var sender = message[0];
                 var msg = message[1];
-                FancyConsoleWrite($"Process {sender}: {msg}");
+                ChatWrite($"Process {sender}: {msg}");
             };
             //Thread.Sleep(5000);
             channel.BasicConsume(
-                queue: name,//channel.CurrentQueue,
+                queue: processName,//channel.CurrentQueue,
                 autoAck: true,
                 consumer: consumer
             );
         });
 
-
-        // private static void WriteColorfulLine(string text, ConsoleColor color)
-        // {
-        //     Console.ForegroundColor = color;
-        //     Console.WriteLine(text);
-        //     Console.ResetColor();
-        // }
-
-        private static void FancyConsoleWrite(string value)
+        /// <summary>
+        /// Send snapshot requests to other processes
+        /// </summary>
+        /// <param name="channel"></param>
+        /// <param name="processName"></param>
+        /// <returns></returns>
+        private static Task HandleRequestSnapshot(IModel channel, string processName) => new Task(() =>
         {
-            Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - {value}");
-        }
+            RegisterProcess(channel, processName, SNAPSHOT_EXCHANGE, SNAPSHOT_CHANNELS);
+            var rand = new Random();
 
-        private static string? GetUserInput()
+            // Wait some seconds before starts to send snapshots request
+            Thread.Sleep(10000);
+            while (true)
+            {
+                var value = rand.Next(5);
+                var guess = rand.Next(5);
+                if (guess == value)
+                {
+                    ChatWrite($"Me ({processName}): requesting snapshot", ConsoleColor.Green);
+                    var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + "snapshot");
+                    foreach (var process in SNAPSHOT_CHANNELS)
+                    {
+                        if (process.ToString() != processName)
+                        {
+                            channel.BasicPublish(
+                                exchange: string.Empty,
+                                routingKey: process.ToString(),
+                                basicProperties: null,
+                                body: body
+                            );
+                        }
+                    }
+
+                }
+
+                Thread.Sleep(10000);
+            }
+        });
+
+
+        /// <summary>
+        /// Receive snapshot request from other processes
+        /// </summary>
+        /// <param name="channel"></param>
+        /// <param name="processName"></param>
+        /// <returns></returns>
+        private static Task HandleReceiveSnapshotMarker(IModel channel, string processName) => new Task(() =>
         {
-            var input = Console.ReadLine();
-            int currentCursorLine = Console.CursorTop;
-            Console.SetCursorPosition(0, Console.CursorTop - 1);
-            Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Me: {input}");
-            Console.SetCursorPosition(0, currentCursorLine);
-            return input;
-        }
+            var consumer = new EventingBasicConsumer(channel);
+            consumer.Received += (model, ea) =>
+            {
+                var body = ea.Body.ToArray();
+                var message = Encoding.UTF8.GetString(body).Split("/%#%/");
+                var sender = message[0];
+                var msg = message[1];
+                ChatWrite($"Process {sender}: sent a snapshot request", ConsoleColor.Green);
+            };
+            //Thread.Sleep(5000);
+            channel.BasicConsume(
+                queue: processName,//channel.CurrentQueue,
+                autoAck: true,
+                consumer: consumer
+            );
+        });
     }
 }
