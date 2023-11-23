@@ -51,7 +51,7 @@ namespace SnapshotChat
         private static void ChatWrite(string value, ConsoleColor? color = null)
         {
             var text = $"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - {value}";
-            CHAT_HISTORY.Add(text);
+            CURRENT_STATE.Add(text);
             if (color.HasValue)
             {
                 Console.ForegroundColor = color.Value;
@@ -75,10 +75,36 @@ namespace SnapshotChat
         }
 
 
-        private static void SaveState(string processName)
+        private static void SnapshotMessage(string marker, string initiatorProcess, string message)
         {
-            Directory.CreateDirectory("state");
-            File.WriteAllLines($"state/{processName}-{DateTime.Now.ToString("dd-MM-yyyy-HH-mm-ss")}", CHAT_HISTORY);
+            if (SNAPSHOT_STORAGE.ContainsKey(marker))
+                SNAPSHOT_STORAGE[marker].Values.Add(message);
+            else
+                SNAPSHOT_STORAGE.Add(
+                    key: marker,
+                    value: new SnapshotState
+                    {
+                        Status = SnapshotStatus.InProgress,
+                        InitiatorProcess = initiatorProcess,
+                        Values = new List<string> { message }
+                    }
+                );
+        }
+
+        private static void SnapshotCurrentState(string marker, string initiatorProcess)
+        {
+            if (SNAPSHOT_STORAGE.ContainsKey(marker))
+                SNAPSHOT_STORAGE[marker].Values.AddRange(CURRENT_STATE);
+            else
+                SNAPSHOT_STORAGE.Add(
+                    key: marker,
+                    value: new SnapshotState
+                    {
+                        Status = SnapshotStatus.InProgress,
+                        InitiatorProcess = initiatorProcess,
+                        Values = CURRENT_STATE
+                    }
+                );
         }
     }
 }
