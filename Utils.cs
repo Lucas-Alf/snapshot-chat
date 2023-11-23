@@ -86,5 +86,15 @@ namespace SnapshotChat
                     }
                 );
         }
+
+        private static string SaveState(string maker, string processName, List<string> state)
+        {
+            var snapshotFile = $"{maker}.txt";
+            Directory.CreateDirectory("snapshots");
+            File.AppendAllText($"snapshots/{snapshotFile}", $"------------ PROCESS: {processName} ------------\n");
+            File.AppendAllLines($"snapshots/{snapshotFile}", state);
+
+            return snapshotFile;
+        }
     }
 }

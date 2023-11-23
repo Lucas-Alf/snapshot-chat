@@ -128,10 +128,7 @@ namespace SnapshotChat
                     SaveMarker(snapshotMarker, processName);
 
                     // Save current state
-                    var snapshotFile = $"{snapshotMarker}.txt";
-                    Directory.CreateDirectory("snapshots");
-                    File.AppendAllText($"snapshots/{snapshotFile}", $"------------ PROCESS: {processName} ------------\n");
-                    File.AppendAllLines($"snapshots/{snapshotFile}", CURRENT_STATE);
+                    var snapshotFile = SaveState(snapshotMarker, processName, CURRENT_STATE);
 
                     // Send a marker message to all output channels
                     var request = new Message
@@ -176,9 +173,10 @@ namespace SnapshotChat
                 // On receive a new snapshot marker from another process
                 if (!SNAPSHOT_STORAGE.ContainsKey(message.Marker))
                 {
-                    // Snapshot current state
+                    // Save received marker
                     SaveMarker(message.Marker, message.Sender);
 
+                    // Send current state to the requestor
                     var request = new Message
                     {
                         Marker = message.Marker,
@@ -197,12 +195,9 @@ namespace SnapshotChat
                 else
                 {
                     // Save snapshot file
-                    var snapshotFile = $"{message.Marker}.txt";
+                    var snapshotFile = SaveState(message.Marker, message.Sender, message.Values);
                     ChatWrite($"(Snapshot): Marker {message.Marker} done. ({snapshotFile})", ConsoleColor.Green);
-                    Directory.CreateDirectory("snapshots");
-                    File.AppendAllText($"snapshots/{snapshotFile}", $"------------ PROCESS: {message.Sender} ------------\n");
-                    File.AppendAllLines($"snapshots/{snapshotFile}", message.Values);
-
+              
                     // Mark snapshot as done
                     SNAPSHOT_STORAGE[message.Marker].Status = SnapshotStatus.Done;
                 }
