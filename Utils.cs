@@ -69,40 +69,20 @@ namespace SnapshotChat
             var input = Console.ReadLine();
             int currentCursorLine = Console.CursorTop;
             Console.SetCursorPosition(0, Console.CursorTop - 1);
-            Console.WriteLine($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Me ({processName}): {input}");
+            ChatWrite($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Me ({processName}): {input}");
             Console.SetCursorPosition(0, currentCursorLine);
             return input;
         }
 
-
-        private static void SnapshotMessage(string marker, string initiatorProcess, string message)
+        private static void SaveMarker(string marker, string initiatorProcess)
         {
-            if (SNAPSHOT_STORAGE.ContainsKey(marker))
-                SNAPSHOT_STORAGE[marker].Values.Add(message);
-            else
+            if (!SNAPSHOT_STORAGE.ContainsKey(marker))
                 SNAPSHOT_STORAGE.Add(
                     key: marker,
                     value: new SnapshotState
                     {
                         Status = SnapshotStatus.InProgress,
-                        InitiatorProcess = initiatorProcess,
-                        Values = new List<string> { message }
-                    }
-                );
-        }
-
-        private static void SnapshotCurrentState(string marker, string initiatorProcess)
-        {
-            if (SNAPSHOT_STORAGE.ContainsKey(marker))
-                SNAPSHOT_STORAGE[marker].Values.AddRange(CURRENT_STATE);
-            else
-                SNAPSHOT_STORAGE.Add(
-                    key: marker,
-                    value: new SnapshotState
-                    {
-                        Status = SnapshotStatus.InProgress,
-                        InitiatorProcess = initiatorProcess,
-                        Values = CURRENT_STATE
+                        InitiatorProcess = initiatorProcess
                     }
                 );
         }

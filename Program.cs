@@ -1,6 +1,7 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
+using System.Text.Json;
 
 namespace SnapshotChat
 {
@@ -88,17 +89,6 @@ namespace SnapshotChat
                 var sender = rawData[0];
                 var message = rawData[1];
                 ChatWrite($"Process {sender}: {message}");
-
-                // Snapshot the received message if has a snapshot in progress
-                // and if the sender process not is the snapshot initiator
-                var inProgressSnapshots = SNAPSHOT_STORAGE
-                    .Where(x =>
-                        x.Value.Status == SnapshotStatus.InProgress &&
-                        x.Value.InitiatorProcess != sender
-                    );
-
-                foreach (var snapshot in inProgressSnapshots)
-                    SnapshotMessage(snapshot.Key, sender, message);
             };
 
             channel.BasicConsume(
@@ -134,11 +124,24 @@ namespace SnapshotChat
                     // Notify that a snapshot is being started
                     ChatWrite($"(Snapshot): Starting snapshot with marker {snapshotMarker}.", ConsoleColor.Green);
 
-                    // Save current state on snapshot
-                    SnapshotCurrentState(snapshotMarker, processName);
+                    // Save marker
+                    SaveMarker(snapshotMarker, processName);
+
+                    // Save current state
+                    var snapshotFile = $"{snapshotMarker}.txt";
+                    Directory.CreateDirectory("snapshots");
+                    File.AppendAllText($"snapshots/{snapshotFile}", $"------------ PROCESS: {processName} ------------\n");
+                    File.AppendAllLines($"snapshots/{snapshotFile}", CURRENT_STATE);
 
                     // Send a marker message to all output channels
-                    var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + snapshotMarker);
+                    var request = new Message
+                    {
+                        Marker = snapshotMarker,
+                        Sender = processName,
+                        // Values = CURRENT_STATE
+                    };
+
+                    var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
                     foreach (var process in SNAPSHOT_CHANNELS)
                     {
                         channel.BasicPublish(
@@ -166,40 +169,42 @@ namespace SnapshotChat
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
             {
-                var body = ea.Body.ToArray();
-                var rawData = Encoding.UTF8.GetString(body).Split("/%#%/");
-                var sender = rawData[0];
-                var message = rawData[1];
-                ChatWrite($"(Snapshot): Received marker {message} from process {sender}.", ConsoleColor.Green);
+                var body = Encoding.UTF8.GetString(ea.Body.ToArray());
+                var message = JsonSerializer.Deserialize<Message>(body);
+                ChatWrite($"(Snapshot): Received marker {message.Marker} from process {message.Sender}.", ConsoleColor.Green);
 
-                // If the process never has seen this snapshot marker
-                if (!SNAPSHOT_STORAGE.ContainsKey(message))
+                // On receive a new snapshot marker from another process
+                if (!SNAPSHOT_STORAGE.ContainsKey(message.Marker))
                 {
                     // Snapshot current state
-                    SnapshotCurrentState(message, sender);
+                    SaveMarker(message.Marker, message.Sender);
 
-                    // Reply the snapshot marker to all output channels
-                    var replyBody = Encoding.UTF8.GetBytes(processName + "/%#%/" + message);
-                    foreach (var process in SNAPSHOT_CHANNELS)
+                    var request = new Message
                     {
-                        channel.BasicPublish(
-                            exchange: string.Empty,
-                            routingKey: $"{SNAPSHOT_EXCHANGE}-{process}",
-                            basicProperties: null,
-                            body: replyBody
-                        );
-                    }
+                        Marker = message.Marker,
+                        Sender = processName,
+                        Values = CURRENT_STATE
+                    };
+
+                    channel.BasicPublish(
+                        exchange: string.Empty,
+                        routingKey: $"{SNAPSHOT_EXCHANGE}-{message.Sender}",
+                        basicProperties: null,
+                        body: Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request))
+                    );
                 }
+                // On receive a snapshot marker that I already know
                 else
                 {
                     // Save snapshot file
-                    var snapshotFile = $"{processName}-{DateTime.Now.ToString("dd-MM-yyyy-HH-mm-ss")}.txt";
-                    ChatWrite($"(Snapshot): Marker {message} done. ({snapshotFile})", ConsoleColor.Green);
+                    var snapshotFile = $"{message.Marker}.txt";
+                    ChatWrite($"(Snapshot): Marker {message.Marker} done. ({snapshotFile})", ConsoleColor.Green);
                     Directory.CreateDirectory("snapshots");
-                    File.WriteAllLines($"snapshots/{snapshotFile}", SNAPSHOT_STORAGE[message].Values);
+                    File.AppendAllText($"snapshots/{snapshotFile}", $"------------ PROCESS: {message.Sender} ------------\n");
+                    File.AppendAllLines($"snapshots/{snapshotFile}", message.Values);
 
                     // Mark snapshot as done
-                    SNAPSHOT_STORAGE[message].Status = SnapshotStatus.Done;
+                    SNAPSHOT_STORAGE[message.Marker].Status = SnapshotStatus.Done;
                 }
             };
 
