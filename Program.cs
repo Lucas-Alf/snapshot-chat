@@ -24,7 +24,7 @@ namespace SnapshotChat
                 ChatWrite("RabbitMQ Connected");
                 var receiveHandler = HandleReceive(chatChannel, processName);
                 var sendHandler = HandleSend(chatChannel, processName);
-                var receiveSnapshotMarkerHandler = HandleReceiveSnapshotMarker(snapshotChannel, processName);
+                var receiveSnapshotMarkerHandler = HandleReceiveSnapshotRequest(snapshotChannel, processName);
                 var sendSnapshotRequestHandler = HandleRequestSnapshot(snapshotChannel, processName);
 
                 receiveHandler.Start();
@@ -115,21 +115,23 @@ namespace SnapshotChat
                 var guess = rand.Next(5);
                 if (guess == value)
                 {
+                    // Notify that a snapshot is being started
                     ChatWrite($"Me ({processName}): requesting snapshot", ConsoleColor.Green);
-                    var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + "snapshot");
+
+                    // Save current state on a file
+                    SaveState(processName);
+
+                    // Send a marker message to all output channels
+                    var body = Encoding.UTF8.GetBytes(processName + "/%#%/" + "SNAPSHOT_MARKER");
                     foreach (var process in SNAPSHOT_CHANNELS)
                     {
-                        if (process != processName)
-                        {
-                            channel.BasicPublish(
-                                exchange: string.Empty,
-                                routingKey: $"{SNAPSHOT_EXCHANGE}-{process}",
-                                basicProperties: null,
-                                body: body
-                            );
-                        }
+                        channel.BasicPublish(
+                            exchange: string.Empty,
+                            routingKey: $"{SNAPSHOT_EXCHANGE}-{process}",
+                            basicProperties: null,
+                            body: body
+                        );
                     }
-
                 }
 
                 Thread.Sleep(10000);
@@ -143,7 +145,7 @@ namespace SnapshotChat
         /// <param name="channel"></param>
         /// <param name="processName"></param>
         /// <returns></returns>
-        private static Task HandleReceiveSnapshotMarker(IModel channel, string processName) => new Task(() =>
+        private static Task HandleReceiveSnapshotRequest(IModel channel, string processName) => new Task(() =>
         {
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>

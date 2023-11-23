@@ -73,5 +73,12 @@ namespace SnapshotChat
             Console.SetCursorPosition(0, currentCursorLine);
             return input;
         }
+
+
+        private static void SaveState(string processName)
+        {
+            Directory.CreateDirectory("state");
+            File.WriteAllLines($"state/{processName}-{DateTime.Now.ToString("dd-MM-yyyy-HH-mm-ss")}", CHAT_HISTORY);
+        }
     }
 }
