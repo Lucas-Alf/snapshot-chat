@@ -128,10 +128,11 @@ namespace SnapshotChat
                 if (guess == value)
                 {
                     // Create a new snapshot marker
-                    var snapshotMarker = Guid.NewGuid().ToString();
+                    int randMarker = new Random(Guid.NewGuid().GetHashCode()).Next();
+                    string snapshotMarker = randMarker.ToString();
 
                     // Notify that a snapshot is being started
-                    ChatWrite($"Me ({processName}): starting snapshot with marker {snapshotMarker}", ConsoleColor.Green);
+                    ChatWrite($"(Snapshot): Starting snapshot with marker {snapshotMarker}.", ConsoleColor.Green);
 
                     // Save current state on snapshot
                     SnapshotCurrentState(snapshotMarker, processName);
@@ -169,7 +170,7 @@ namespace SnapshotChat
                 var rawData = Encoding.UTF8.GetString(body).Split("/%#%/");
                 var sender = rawData[0];
                 var message = rawData[1];
-                ChatWrite($"Process {sender}: sent snapshot marker {message}", ConsoleColor.Green);
+                ChatWrite($"(Snapshot): Received marker {message} from process {sender}.", ConsoleColor.Green);
 
                 // If the process never has seen this snapshot marker
                 if (!SNAPSHOT_STORAGE.ContainsKey(message))
@@ -193,7 +194,7 @@ namespace SnapshotChat
                 {
                     // Save snapshot file
                     var snapshotFile = $"{processName}-{DateTime.Now.ToString("dd-MM-yyyy-HH-mm-ss")}.txt";
-                    ChatWrite($"Process {processName}: snapshot done ({snapshotFile})");
+                    ChatWrite($"(Snapshot): Marker {message} done. ({snapshotFile})");
                     Directory.CreateDirectory("snapshots");
                     File.WriteAllLines($"snapshots/{snapshotFile}", SNAPSHOT_STORAGE[message].Values);
 
