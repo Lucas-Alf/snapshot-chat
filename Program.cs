@@ -121,14 +121,14 @@ namespace SnapshotChat
                     int randMarker = new Random(Guid.NewGuid().GetHashCode()).Next();
                     string snapshotMarker = randMarker.ToString();
 
-                    // Notify that a snapshot is being started
-                    ChatWrite($"(Snapshot): Starting snapshot with marker {snapshotMarker}.", ConsoleColor.Green);
-
                     // Save marker
                     SaveMarker(snapshotMarker, processName);
 
                     // Save current state
                     var snapshotFile = SaveState(snapshotMarker, processName, CURRENT_STATE);
+
+                    // Notify that a snapshot is being started
+                    ChatWrite($"(Snapshot): Starting snapshot with marker {snapshotMarker}.", ConsoleColor.Green);
 
                     // Send a marker message to all output channels
                     var request = new Message
@@ -168,7 +168,6 @@ namespace SnapshotChat
             {
                 var body = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var message = JsonSerializer.Deserialize<Message>(body);
-                ChatWrite($"(Snapshot): Received marker {message.Marker} from process {message.Sender}.", ConsoleColor.Green);
 
                 // On receive a new snapshot marker from another process
                 if (!SNAPSHOT_STORAGE.ContainsKey(message.Marker))
@@ -197,10 +196,12 @@ namespace SnapshotChat
                     // Save snapshot file
                     var snapshotFile = SaveState(message.Marker, message.Sender, message.Values);
                     ChatWrite($"(Snapshot): Marker {message.Marker} done. ({snapshotFile})", ConsoleColor.Green);
-              
+
                     // Mark snapshot as done
                     SNAPSHOT_STORAGE[message.Marker].Status = SnapshotStatus.Done;
                 }
+
+                ChatWrite($"(Snapshot): Received marker {message.Marker} from process {message.Sender}.", ConsoleColor.Green);
             };
 
             channel.BasicConsume(
