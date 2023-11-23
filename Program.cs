@@ -194,7 +194,7 @@ namespace SnapshotChat
                 {
                     // Save snapshot file
                     var snapshotFile = $"{processName}-{DateTime.Now.ToString("dd-MM-yyyy-HH-mm-ss")}.txt";
-                    ChatWrite($"(Snapshot): Marker {message} done. ({snapshotFile})");
+                    ChatWrite($"(Snapshot): Marker {message} done. ({snapshotFile})", ConsoleColor.Green);
                     Directory.CreateDirectory("snapshots");
                     File.WriteAllLines($"snapshots/{snapshotFile}", SNAPSHOT_STORAGE[message].Values);
 
