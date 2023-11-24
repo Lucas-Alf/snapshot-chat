@@ -16,9 +16,9 @@ namespace SnapshotChat
 
         static void Main(string[] args)
         {
-            //Generate random process name
-            int rand = new Random(Guid.NewGuid().GetHashCode()).Next();
-            string processName = rand.ToString();
+            // Get process name
+            Console.Write("Process name: ");
+            var processName = Console.ReadLine();
 
             using (var chatChannel = ChannelFactory.OpenConnection(CHAT_EXCHANGE, processName))
             using (var snapshotChannel = ChannelFactory.OpenConnection(SNAPSHOT_EXCHANGE, processName))
@@ -107,19 +107,16 @@ namespace SnapshotChat
         private static Task HandleRequestSnapshot(IModel channel, string processName) => new Task(() =>
         {
             RegisterProcess(channel, processName, SNAPSHOT_EXCHANGE, SNAPSHOT_CHANNELS);
-            var rand = new Random();
-
-            // Wait some seconds before starts to send snapshots request
-            Thread.Sleep(10000);
-            while (true)
+            var currentMarker = 1;
+            if (processName == "1")
             {
-                var value = rand.Next(5);
-                var guess = rand.Next(5);
-                if (guess == value)
+                while (true)
                 {
+                    // Wait some seconds before starts to send snapshots request
+                    Thread.Sleep(30000);
+
                     // Create a new snapshot marker
-                    int randMarker = new Random(Guid.NewGuid().GetHashCode()).Next();
-                    string snapshotMarker = randMarker.ToString();
+                    string snapshotMarker = currentMarker.ToString();
 
                     // Save marker
                     SaveMarker(snapshotMarker, processName);
@@ -148,9 +145,9 @@ namespace SnapshotChat
                             body: body
                         );
                     }
-                }
 
-                Thread.Sleep(10000);
+                    currentMarker++;
+                }
             }
         });
 
@@ -168,6 +165,8 @@ namespace SnapshotChat
             {
                 var body = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var message = JsonSerializer.Deserialize<Message>(body);
+
+                ChatWrite($"(Snapshot): Received marker {message.Marker} from process {message.Sender}.", ConsoleColor.Green);
 
                 // On receive a new snapshot marker from another process
                 if (!SNAPSHOT_STORAGE.ContainsKey(message.Marker))
@@ -194,14 +193,9 @@ namespace SnapshotChat
                 else
                 {
                     // Save snapshot file
+                    ChatWrite($"(Snapshot): Saving snapshot {message.Marker}.", ConsoleColor.Green);
                     var snapshotFile = SaveState(message.Marker, message.Sender, message.Values);
-                    ChatWrite($"(Snapshot): Marker {message.Marker} done. ({snapshotFile})", ConsoleColor.Green);
-
-                    // Mark snapshot as done
-                    SNAPSHOT_STORAGE[message.Marker].Status = SnapshotStatus.Done;
                 }
-
-                ChatWrite($"(Snapshot): Received marker {message.Marker} from process {message.Sender}.", ConsoleColor.Green);
             };
 
             channel.BasicConsume(

@@ -69,7 +69,7 @@ namespace SnapshotChat
             var input = Console.ReadLine();
             int currentCursorLine = Console.CursorTop;
             Console.SetCursorPosition(0, Console.CursorTop - 1);
-            ChatWrite($"{DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")} - Me ({processName}): {input}");
+            ChatWrite($"Me: {input}");
             Console.SetCursorPosition(0, currentCursorLine);
             return input;
         }
